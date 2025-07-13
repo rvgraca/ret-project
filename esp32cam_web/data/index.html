@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>ESP32-CAM Control</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f9f9f9; }
+    .container { max-width: 900px; margin: auto; }
+    .section { margin-bottom: 30px; }
+    label { display: block; margin-top: 10px; font-weight: bold; }
+    input[type="range"] { width: 100%; }
+    button, input[type="checkbox"] { margin-top: 10px; }
+    #cam-stream {display: none; width: 100%; margin-top: 20px; }
+    #snapshot-img {width: 100%; margin-top: 20px; }
+    #capture-image { display: none; width: 100%; margin-top: 20px; }
+    #slider-reversed {direction : rtl;}
+    .gallery-container { position: relative; overflow: hidden; margin-top: 20px; }
+    .gallery { display: flex; overflow-x: auto; scroll-behavior: smooth; }
+    .thumb { width: 100px; height: 75px; object-fit: cover; margin-right: 5px; cursor: pointer; }
+    .arrow { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.5); color: #fff; border: none; font-size: 24px; padding: 10px; cursor: pointer; }
+    .arrow.left { left: 0; }
+    .arrow.right { right: 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Control de ESP32-CAM</h1>
+    <div class="section">
+      <img id="cam-stream" src="" alt="Stream" />
+      <img id="capture-image" src="" alt="Captura" />
+      <br />
+      <button id="btn-capture">📷 Get Still</button>
+      <button id="btn-download">⬇️ Save Image</button>
+      <button id="btn-reset">Reset values</button>
+      <br />
+      <label>
+        🔦 LED Flash
+        <input type="checkbox" id="led-switch" />
+      </label>
+      <label>
+        🎥 Stream Activo
+        <input type="checkbox" id="stream-switch"/>
+      </label>
+    </div>
+    <div class="section">
+      <h2>Controles de Imagen</h2>
+      
+      <!-- Cada input ahora tiene data-var Y class="slider" -->
+      <label>Resolución
+        <input type="range" min="0" max="15" value="10" data-var="framesize" class="slider" />
+      </label>
+      <label>Calidad
+        <input type="range" min="4" max="63" value="10" data-var="quality" class="slider" id="slider-reversed"/>
+      </label>
+      <label>Contraste
+        <input type="range" min="-2" max="2" value="0" data-var="contrast" class="slider" />
+      </label>
+      <label>Brillo
+      <input type="range" min="-2" max="2" value="0" data-var="brightness" class="slider" />
+      </label>
+      <label>Saturación
+        <input type="range" min="-2" max="2" value="0" data-var="saturation" class="slider" />
+      </label>
+      <label>Ganancia Ceiling
+        <input type="range" min="0" max="6" value="0" data-var="gainceiling" class="slider" />
+      </label>
+      <label>Balance de blancos (AWB)
+        <input type="checkbox" data-var="awb" class="checkbox" checked />
+      </label>
+      <label>Auto Gain Control (AGC)
+        <input type="checkbox" data-var="agc" class="checkbox" checked />
+      </label>
+      <label>Auto Exposure Control (AEC)
+        <input type="checkbox" data-var="aec" class="checkbox" checked />
+      </label>
+      <label>HMirror
+        <input type="checkbox" data-var="hmirror" class="checkbox" />
+      </label>
+      <label>VFlip
+        <input type="checkbox" data-var="vflip" class="checkbox" />
+      </label>
+      <label>Ganancia de blancos (AWB Gain)
+        <input type="checkbox" data-var="awb_gain" class="checkbox" checked />
+      </label>
+      <label>Ganancia de control (AGC Gain)
+        <input type="checkbox" data-var="agc_gain" class="checkbox" checked />
+      </label>
+      <label>aec value
+        <input type="checkbox" data-var="aec_value" class="checkbox" checked />
+      </label>
+      <label>Auto Exposure v2 (AEC2)
+        <input type="checkbox" data-var="aec2" class="checkbox" checked />
+      </label>
+      <label>dcw 
+        <input type="checkbox" data-var="dcw" class="checkbox" checked />
+      </label>
+      <label>Corrección de píxeles negros (BPC)
+        <input type="checkbox" data-var="bpc" class="checkbox" />
+      </label>
+      <label>Corrección de píxeles blancos (WPC)
+        <input type="checkbox" data-var="wpc" class="checkbox" />
+      </label>
+      <label>Raw Gma
+        <input type="checkbox" data-var="raw_gma" class="checkbox" />
+      </label>
+      <label>lenc
+        <input type="checkbox" data-var="lenc" class="checkbox" />
+      </label>
+      <label>Efecto especial
+        <input type="range" min="0" max="6" value="0" data-var="special_effect" class="slider" />
+      </label>
+      <label>WB mode
+        <input type="range" min="0" max="4" data-var="wb_mode" class="slider" />
+      </label>
+      <label>Nivel de exposición
+        <input type="range" min="-2" max="2" value="0" data-var="ae_level" class="slider" />
+      </label>
+    </div>
+    <div class="section">
+      <h2>Galería</h2>
+      <div class="gallery-container">
+        <button class="arrow left" id="scroll-left">&lt;</button>
+        <div class="gallery" id="gallery"></div>
+        <button class="arrow right" id="scroll-right">&gt;</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const baseURL = document.location.origin;
+    const stream = document.getElementById('cam-stream');
+    const snapshotImg = document.getElementById('snapshot-img');
+    const modeSnapshot = document.getElementById('mode-snapshot');
+    const stopSwitch = document.getElementById('stream-switch');
+    const btnCapture = document.getElementById('btn-capture');
+    const btnDownload = document.getElementById('btn-download');
+    const selectImage = document.getElementById('select-image');
+    const btnDownloadSelect = document.getElementById('btn-download-select');
+    const btnDownloadAll = document.getElementById('btn-download-all');
+    const gallery = document.getElementById('gallery');
+    const scrollLeft = document.getElementById('scroll-left');
+    const scrollRight = document.getElementById('scroll-right');
+    
+    let imageList = [];
+    let snapshotInterval;
+    //
+    const btnReset = document.getElementById('btn-reset');
+    const ledSwitch = document.getElementById('led-switch');
+
+    const capture = document.getElementById('capture-image');
+    //
+
+
+
+    document.querySelectorAll('input.slider, input.checkbox').forEach(input => {
+      if (input.type === 'range') {
+        input.setAttribute('data-initial', input.value);
+      } else if (input.type === 'checkbox') {
+        input.setAttribute('data-initial', input.checked);
+      }
+    });
+
+    function stopStream() {
+      stream.src = "";
+      stream.style.display = 'none';
+    }
+
+    function startStream() {
+      // capture.style.display = 'none';
+      stream.style.display = 'block';
+      stream.src = `${baseURL}/stream`;
+    }
+
+    // function captureOnce(addToGallery = true) {
+    //   const canvas = document.createElement('canvas');
+    //   const ctx = canvas.getContext('2d');
+    //   canvas.width = stream.naturalWidth || stream.width;
+    //   canvas.height = stream.naturalHeight || stream.height;
+    //   ctx.drawImage(stream, 0, 0, canvas.width, canvas.height);
+    //   canvas.toBlob(blob => {
+    //     const url = URL.createObjectURL(blob);
+    //     snapshotImg.src = url;
+    //     snapshotImg.style.display = 'block';
+    //     if (addToGallery) addImageToGallery(url);
+    //   }, 'image/jpeg');
+    // }
+
+    // function addImageToGallery(url) {
+    //   const idx = imageList.push(url) - 1;
+    //   const thumb = document.createElement('img');
+    //   thumb.src = url;
+    //   thumb.className = 'thumb';
+    //   thumb.addEventListener('click', () => {
+    //     snapshotImg.src = url;
+    //     snapshotImg.style.display = 'block';
+    //     stopStream();
+    //     selectImage.value = idx;
+    //   });
+    //   gallery.appendChild(thumb);
+
+    //   const option = document.createElement('option');
+    //   option.value = idx;
+    //   option.text = `Imagen ${idx+1}`;
+    //   selectImage.appendChild(option);
+    // }
+
+    // modeSnapshot.addEventListener('change', () => {
+    //   clearInterval(snapshotInterval);
+    //   if (modeSnapshot.checked) {
+    //     stopStream();
+    //     snapshotInterval = setInterval(() => captureOnce(true), 5000);
+    //   } else {
+    //     clearInterval(snapshotInterval);
+    //     startStream();
+    //   }
+    // });
+
+    async function updateSetting(varName, value) {
+      let streamEnabled = document.getElementById('stream-switch').checked;
+      if (streamEnabled) stopStream();
+      try {
+        let res = await fetch(`/control?var=${varName}&val=${value}`);
+        if (!res.ok) throw new Error("Error al cambiar parámetro");
+      } catch (e) {
+        console.error(`Fallo al actualizar ${varName}:`, e);
+      }
+      if (streamEnabled) setTimeout(startStream, 500);
+    }
+
+
+    document.querySelectorAll('.slider').forEach(slider => {
+      slider.addEventListener('input', (e) => {
+        const varName = e.target.dataset.var;
+        const value = e.target.value;
+        updateSetting(varName, value);
+      });
+    });
+
+    document.querySelectorAll('.checkbox').forEach(checkbox => {
+      checkbox.addEventListener('change', (e) => {
+        const varName = e.target.dataset.var;
+        const value = e.target.checked ? 1 : 0;
+        updateSetting(varName, value);
+      });
+    });
+
+    document.querySelectorAll('.checkbox').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const varName = e.target.dataset.var;
+        const value = e.target.value;
+        updateSetting(varName, value);
+      });
+    });
+
+
+    ledSwitch.addEventListener('change', function () {
+      updateSetting('led_intensity', this.checked ? 1 : 0);
+    });
+
+    stopSwitch.addEventListener('change', () => {
+      if (stopSwitch.checked) {
+        startStream();
+      } else {
+        stopStream();
+      }
+    });
+
+
+    btnCapture.addEventListener('click', () => {
+      // 1) Capturar antes de detener
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = stream.naturalWidth || stream.width;
+      canvas.height = stream.naturalHeight || stream.height;
+      ctx.drawImage(stream, 0, 0, canvas.width, canvas.height);
+      // 2) Convertir a Blob y mostrar
+      canvas.toBlob(blob => {
+        const url = URL.createObjectURL(blob);
+        capture.src = url;
+        capture.style.display = 'block';
+        // 3) Luego, si el switch de stream está desmarcado, dejarlo detenido
+        if (!stopSwitch.checked) {
+          stopStream();
+        }
+      }, 'image/jpeg');
+    });
+
+
+    //btnCapture.addEventListener('click', () => {
+    //    captureOnce(true);
+    //  });
+
+
+
+    btnDownload.addEventListener('click', () => {
+      if (!capture.src) {
+        return alert("No hay imagen capturada");
+      }
+      const link = document.createElement('a');
+      link.href = capture.src;
+      link.download = 'esp32cam.jpg';
+      link.click();
+    });
+    //btnDownload.addEventListener('click', () => {
+    //  if (!snapshotImg.src) return alert('No hay imagen capturada');
+    //  const link = document.createElement('a'); link.href = snapshotImg.src;
+    //  link.download = 'esp32cam.jpg'; link.click();
+    //});
+    //btnDownloadSelect.addEventListener('click', () => {
+    //  const idx = selectImage.value;
+    //  if (idx === '') return;
+    //  const link = document.createElement('a'); link.href = imageList[idx];
+    //  link.download = `esp32cam_${parseInt(idx)+1}.jpg`; link.click();
+    //});
+//
+    //btnDownloadAll.addEventListener('click', () => {
+    //  imageList.forEach((url, i) => {
+    //    const link = document.createElement('a'); link.href = url;
+    //    link.download = `esp32cam_${i+1}.jpg`; link.click();
+    //  });
+    //});
+//
+    //scrollLeft.addEventListener('click', () => gallery.scrollBy({left: -200, behavior: 'smooth'}));
+    //scrollRight.addEventListener('click', () => gallery.scrollBy({left: 200, behavior: 'smooth'}));
+
+    btnReset.addEventListener('click', () => {
+    const inputs = document.querySelectorAll('input.slider, input.checkbox');
+        inputs.forEach(input => {
+          const initial = input.getAttribute('data-initial');
+
+          if (input.type === 'range') {
+            input.value = initial;
+            input.dispatchEvent(new Event('input')); // Para actualizar UI si hay listeners
+          } else if (input.type === 'checkbox') {
+            input.checked = (initial === 'true');
+            input.dispatchEvent(new Event('change')); // Si hay lógica asociada
+          }
+        });
+    });
+  </script>
+</body>
+</html>

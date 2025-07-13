@@ -17,10 +17,13 @@
 
 // const char* ssid = "polymath-phone";
 // const char* password = "pato-eduardo-walsh-2006";
-const char* ssid = "MovistarFibra-2023";
-const char* password = "30882709";
+// const char* ssid = "MovistarFibra-2023";
+// const char* password = "30882709";
+const char* ssid = "PIC16F628A de natan";
+const char* password = "IPHONERICKPROMAX";
 // String serverIP = "http://192.168.9.205:3000";  // IP del servidor local con puerto
-String serverIP = "http://192.168.1.43:3000";  // IP del servidor local con puerto
+// String serverIP = "http://192.168.1.43:3000";  // IP del servidor local con puerto
+String serverIP = "http://192.168.230.205:3000";  // IP del servidor local con puerto
 
 const int visualizations = 1;
 
